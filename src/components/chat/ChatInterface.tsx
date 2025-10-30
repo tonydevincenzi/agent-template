@@ -332,7 +332,7 @@ export default function ChatInterface() {
               if (message.eventType === 'content_delta' && message.content && !message.toolCall && !message.thinking) {
                 return (
                   <div key={message.id} className="max-w-4xl mx-auto">
-                    <div className="text-base text-gray-900 whitespace-pre-wrap">
+                    <div className="text-sm text-gray-900 whitespace-pre-wrap">
                       {message.content}
                     </div>
                   </div>
@@ -498,101 +498,131 @@ export default function ChatInterface() {
 }
 
 function MessageBubble({ message, isLoading }: { message: Message; isLoading: boolean }) {
-  const [expanded, setExpanded] = useState(false);
+  const [rawExpanded, setRawExpanded] = useState(false);
+  const [toolExpanded, setToolExpanded] = useState(false); // Collapsed by default
   
   // Don't show badge for user messages or accumulated content
   const showBadge = message.role !== 'user' && message.eventType !== 'content_delta';
   
+  // Check if this is a tool-related message for subtle styling
+  const isToolMessage = message.eventType === 'tool_call' || message.eventType === 'tool_result';
+  
   return (
     <div className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
       <div className={`max-w-3xl w-full ${message.role === 'user' ? 'flex justify-end' : ''}`}>
-        <Card className={`p-4 ${
-          message.role === 'user'
-            ? 'bg-black text-white border-black'
-            : message.eventType === 'tool_call'
-            ? 'bg-orange-50 border-orange-200'
-            : message.eventType === 'tool_result'
-            ? 'bg-cyan-50 border-cyan-200'
-            : message.eventType === 'thinking'
-            ? 'bg-purple-50 border-purple-200'
-            : 'bg-white text-gray-900 border-gray-200'
-        }`}>
-          {/* Event Type Badge - only for special events */}
-          {showBadge && (
-            <div className="mb-2 flex items-center justify-between">
-              <span className={`text-xs font-bold px-2 py-1 rounded ${
-                message.eventType === 'thinking' ? 'bg-purple-200 text-purple-900' :
-                message.eventType === 'tool_call' ? 'bg-orange-200 text-orange-900' :
-                message.eventType === 'tool_result' ? 'bg-cyan-200 text-cyan-900' :
-                message.eventType === 'error' ? 'bg-red-200 text-red-900' :
-                'bg-gray-200 text-gray-700'
-              }`}>
-                {message.eventType === 'tool_call' ? '🔧 Tool Call' :
-                 message.eventType === 'tool_result' ? '✅ Tool Result' :
-                 message.eventType === 'thinking' ? '💭 Thinking' :
-                 message.eventType.replace('_', ' ').toUpperCase()}
+        {isToolMessage ? (
+          // Tool calls: single line, no shadow, subtle background
+          <div className="bg-gray-50/40 border border-gray-200/60 rounded-lg shadow-none py-1.5 px-3">
+            <button
+              onClick={() => setToolExpanded(!toolExpanded)}
+              className="w-full flex items-center justify-between text-left hover:bg-gray-100/30 rounded transition-colors -mx-1 px-1 py-0.5"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">
+                  {message.eventType === 'tool_call' ? 'Tool' : 'Result'}
+                </span>
+                <span className="text-sm text-gray-600">{message.toolCall?.name}</span>
+              </div>
+              <span className="text-xs text-gray-400">
+                {toolExpanded ? '▼' : '▶'}
               </span>
-              {message.raw && (
-                <button
-                  onClick={() => setExpanded(!expanded)}
-                  className="text-xs text-gray-500 hover:text-gray-700 ml-2"
-                >
-                  {expanded ? '▼' : '▶'} raw
-                </button>
-              )}
-            </div>
-          )}
-          
-          {/* Content Display */}
-          {message.thinking && (
-            <div className="text-sm text-purple-900 whitespace-pre-wrap italic">
-              {message.thinking}
-            </div>
-          )}
-          
-          {message.content && (
-            <div className={`text-sm whitespace-pre-wrap ${
-              message.role === 'user' ? 'text-white' : 'text-gray-900'
-            }`}>
-              {message.content}
-            </div>
-          )}
-          
-          {message.toolCall && (
-            <div className="space-y-3">
-              <div className="text-sm font-semibold">{message.toolCall.name}</div>
-              {message.toolCall.input && Object.keys(message.toolCall.input).length > 0 && (
-                <div>
-                  <div className="text-xs font-semibold text-gray-600 mb-1">Input:</div>
-                  <pre className="text-xs bg-white p-3 rounded border overflow-x-auto">
-                    {JSON.stringify(message.toolCall.input, null, 2)}
-                  </pre>
-                </div>
-              )}
-              {message.toolCall.result && (
-                <div>
-                  <div className="text-xs font-semibold text-gray-600 mb-1">Result:</div>
-                  <pre className="text-xs bg-white p-3 rounded border overflow-x-auto max-h-60">
-                    {typeof message.toolCall.result === 'string' 
-                      ? message.toolCall.result 
-                      : JSON.stringify(message.toolCall.result, null, 2)}
-                  </pre>
-                </div>
-              )}
-            </div>
-          )}
-          
-          {/* Raw Event Data (expandable) */}
-          {expanded && message.raw && (
-            <div className="mt-3 pt-3 border-t border-gray-200">
-              <div className="text-xs font-semibold text-gray-600 mb-2">Raw Event Data:</div>
-              <pre className="text-xs bg-gray-50 p-3 rounded border overflow-x-auto max-h-60 font-mono">
-                {JSON.stringify(message.raw, null, 2)}
-              </pre>
-            </div>
-          )}
-          
-        </Card>
+            </button>
+            
+            {/* Tool details - shown when expanded */}
+            {toolExpanded && message.toolCall && (
+              <div className="space-y-2 pt-2 mt-1 border-t border-gray-200/60">
+                {message.toolCall.input && Object.keys(message.toolCall.input).length > 0 && (
+                  <div>
+                    <div className="text-xs text-gray-500 mb-1">Input</div>
+                    <pre className="text-xs bg-white/60 p-2 rounded border border-gray-200/60 overflow-x-auto font-mono text-gray-700">
+                      {JSON.stringify(message.toolCall.input, null, 2)}
+                    </pre>
+                  </div>
+                )}
+                {message.toolCall.result && (
+                  <div>
+                    <div className="text-xs text-gray-500 mb-1">Result</div>
+                    <pre className="text-xs bg-white/60 p-2 rounded border border-gray-200/60 overflow-x-auto max-h-60 font-mono text-gray-700">
+                      {typeof message.toolCall.result === 'string' 
+                        ? message.toolCall.result 
+                        : JSON.stringify(message.toolCall.result, null, 2)}
+                    </pre>
+                  </div>
+                )}
+                {message.raw && (
+                  <div className="pt-2 border-t border-gray-200/60">
+                    <button
+                      onClick={() => setRawExpanded(!rawExpanded)}
+                      className="text-xs text-gray-400 hover:text-gray-600"
+                    >
+                      {rawExpanded ? '▼' : '▶'} raw
+                    </button>
+                    {rawExpanded && (
+                      <pre className="text-xs bg-gray-50/60 p-2 rounded border border-gray-200/60 overflow-x-auto max-h-60 font-mono text-gray-600 mt-1">
+                        {JSON.stringify(message.raw, null, 2)}
+                      </pre>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <Card className={`${
+            message.role === 'user'
+              ? 'bg-black text-white border-black p-4'
+              : message.eventType === 'thinking'
+              ? 'bg-purple-50/30 border-purple-200/40 p-3'
+              : 'bg-white text-gray-900 border-gray-200 p-4'
+          }`}>
+            {/* Event Type Badge - for non-tool messages */}
+            {showBadge && (
+              <div className="mb-2 flex items-center justify-between">
+                <span className={`text-xs px-1.5 py-0.5 rounded ${
+                  message.eventType === 'thinking' ? 'text-purple-600 bg-purple-50' :
+                  message.eventType === 'error' ? 'text-red-600 bg-red-50' :
+                  'text-gray-500 bg-gray-100'
+                }`}>
+                  {message.eventType === 'thinking' ? 'Thinking' :
+                   message.eventType.replace('_', ' ').toUpperCase()}
+                </span>
+                {message.raw && (
+                  <button
+                    onClick={() => setRawExpanded(!rawExpanded)}
+                    className="text-xs text-gray-400 hover:text-gray-600 ml-2"
+                  >
+                    {rawExpanded ? '▼' : '▶'} raw
+                  </button>
+                )}
+              </div>
+            )}
+            
+            {/* Content Display */}
+            {message.thinking && (
+              <div className="text-sm text-purple-700/80 whitespace-pre-wrap italic">
+                {message.thinking}
+              </div>
+            )}
+            
+            {message.content && (
+              <div className={`text-sm whitespace-pre-wrap ${
+                message.role === 'user' ? 'text-white' : 'text-gray-900'
+              }`}>
+                {message.content}
+              </div>
+            )}
+            
+            {/* Raw Event Data (expandable) */}
+            {rawExpanded && message.raw && (
+              <div className="mt-3 pt-3 border-t border-gray-200/60">
+                <div className="text-xs font-medium text-gray-500 mb-2">Raw Event Data</div>
+                <pre className="text-xs bg-gray-50/80 p-2 rounded border border-gray-200/60 overflow-x-auto max-h-60 font-mono text-gray-600">
+                  {JSON.stringify(message.raw, null, 2)}
+                </pre>
+              </div>
+            )}
+          </Card>
+        )}
       </div>
     </div>
   );
