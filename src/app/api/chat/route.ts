@@ -6,9 +6,26 @@ export async function POST(request: NextRequest) {
   try {
     const config = getAgentConfig();
     
-    // Initialize Anthropic
+    // Check if API key is available
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    console.log('ANTHROPIC_API_KEY check:', {
+      exists: !!apiKey,
+      length: apiKey?.length || 0,
+      startsWith: apiKey?.substring(0, 7) || 'N/A',
+      allEnvKeys: Object.keys(process.env).filter(k => k.includes('ANTHROPIC') || k.includes('API') || k.includes('AGENT'))
+    });
+    
+    if (!apiKey || apiKey.trim() === '') {
+      console.error('ANTHROPIC_API_KEY is not set or is empty in environment variables');
+      return NextResponse.json(
+        { error: 'ANTHROPIC_API_KEY is not configured. Please check environment variables.' },
+        { status: 500 }
+      );
+    }
+    
+    // Initialize Anthropic with explicit apiKey
     const anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
+      apiKey: apiKey.trim(),
     });
     
     // Initialize tools array
