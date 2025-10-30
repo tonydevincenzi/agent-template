@@ -1,6 +1,7 @@
 export interface AgentConfig {
   name: string;
   systemPrompt: string;
+  model: string;
   rules?: string[];
   tools: Array<{ id: string; name: string; description: string; enabled: boolean }>;
   webSearch: boolean;
@@ -23,6 +24,7 @@ export function getAgentConfig(): AgentConfig {
     return {
       name: config.name || 'AI Agent',
       systemPrompt: config.systemPrompt || 'You are a helpful AI assistant.',
+      model: config.model || 'claude-haiku-4-5-20251001',
       rules: config.rules || [],
       tools: config.tools || [],
       webSearch: config.webSearch || false,
@@ -42,6 +44,7 @@ export function getAgentConfig(): AgentConfig {
     return {
       name: 'AI Agent',
       systemPrompt: 'You are a helpful AI assistant.',
+      model: 'claude-haiku-4-5-20251001',
       rules: [],
       tools: [],
       webSearch: false,
