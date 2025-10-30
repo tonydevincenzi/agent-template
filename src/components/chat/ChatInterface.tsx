@@ -39,11 +39,20 @@ export default function ChatInterface() {
   const [agentConfig, setAgentConfig] = useState<any>(null);
   const [todos, setTodos] = useState<TodoItem[]>([]);
   const [showTodos, setShowTodos] = useState(false);
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // Load config and initialize theme
   useEffect(() => {
+    // Check URL parameter first
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlTheme = urlParams.get('theme');
+    if (urlTheme === 'dark' || urlTheme === 'light') {
+      setTheme(urlTheme);
+    }
+
     fetch('/api/config')
       .then(r => r.json())
       .then(data => {
@@ -51,8 +60,24 @@ export default function ChatInterface() {
         if (data.uiCustomization?.todoListVisible !== undefined) {
           setShowTodos(data.uiCustomization.todoListVisible);
         }
+        // Initialize theme from config (if not set by URL)
+        if (!urlTheme && data.uiCustomization?.theme) {
+          setTheme(data.uiCustomization.theme);
+        }
       })
       .catch(console.error);
+  }, []);
+
+  // Listen for theme changes from parent window (when embedded in iframe)
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'THEME_CHANGE') {
+        setTheme(event.data.theme);
+      }
+    };
+    
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
   }, []);
 
   useEffect(() => {
@@ -294,18 +319,24 @@ export default function ChatInterface() {
     setTodos(prev => prev.filter(todo => todo.id !== id));
   };
 
+  const isDark = theme === 'dark';
+
   return (
-    <div className="flex h-screen bg-gray-50 relative">
+    <div className={`flex h-screen relative ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Messages Area - scrollable */}
         <div className="flex-1 overflow-y-auto p-6 pb-32 relative">
           {/* Gradient fadeout at bottom - fades content under input */}
-          <div className="fixed bottom-0 left-0 right-0 h-40 pointer-events-none z-40 bg-gradient-to-t from-gray-50 via-gray-50/80 to-transparent" />
+          <div className={`fixed bottom-0 left-0 right-0 h-40 pointer-events-none z-40 bg-gradient-to-t ${
+            isDark ? 'from-gray-900 via-gray-900/80' : 'from-gray-50 via-gray-50/80'
+          } to-transparent`} />
           <div className="max-w-4xl mx-auto px-4 space-y-6 relative z-10 min-h-full flex flex-col">
             {messages.length === 0 && agentConfig && (
               <div className="flex-1 flex items-center justify-center">
-                <div className="w-full max-w-2xl space-y-3 text-gray-400 text-sm text-center">
+                <div className={`w-full max-w-2xl space-y-3 text-sm text-center ${
+                  isDark ? 'text-gray-500' : 'text-gray-400'
+                }`}>
                   <div>{agentConfig.name}</div>
                   <div>{agentConfig.model || 'Model not specified'}</div>
                   {(() => {
@@ -334,7 +365,9 @@ export default function ChatInterface() {
                 return (
                   <div key={message.id} className="max-w-4xl">
                     <div 
-                      className="text-base text-gray-900 whitespace-pre-wrap inline-block max-w-full transition-all duration-75 ease-out"
+                      className={`text-base whitespace-pre-wrap inline-block max-w-full transition-all duration-75 ease-out ${
+                        isDark ? 'text-gray-100' : 'text-gray-900'
+                      }`}
                       style={{
                         width: 'fit-content',
                         maxWidth: '100%',
@@ -351,6 +384,7 @@ export default function ChatInterface() {
                   key={message.id}
                   message={message}
                   isLoading={isLoading && index === messages.length - 1}
+                  theme={theme}
                 />
               );
             })}
@@ -362,22 +396,26 @@ export default function ChatInterface() {
 
       {/* Todo List Sidebar */}
       {showTodos && (
-        <div className="w-80 border-l border-gray-200 bg-white flex flex-col">
-          <div className="p-4 border-b border-gray-200">
-            <h2 className="font-semibold text-gray-900">Todo List</h2>
-            <p className="text-sm text-gray-500 mt-1">
+        <div className={`w-80 border-l flex flex-col ${
+          isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'
+        }`}>
+          <div className={`p-4 border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
+            <h2 className={`font-semibold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>Todo List</h2>
+            <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
               {todos.filter(t => t.status === 'pending').length} pending
             </p>
           </div>
           <ScrollArea className="flex-1 p-4">
             {todos.length === 0 ? (
-              <p className="text-sm text-gray-500 text-center mt-8">
+              <p className={`text-sm text-center mt-8 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                 No todos yet. The agent will add tasks here as it works.
               </p>
             ) : (
               <div className="space-y-2">
                 {todos.map((todo) => (
-                  <Card key={todo.id} className="p-3">
+                  <Card key={todo.id} className={`p-3 ${
+                    isDark ? 'bg-gray-700 border-gray-600' : ''
+                  }`}>
                     <div className="flex items-start gap-2">
                       <input
                         type="checkbox"
@@ -388,8 +426,8 @@ export default function ChatInterface() {
                       <div className="flex-1">
                         <p className={`text-sm ${
                           todo.status === 'completed' 
-                            ? 'line-through text-gray-400' 
-                            : 'text-gray-900'
+                            ? `line-through ${isDark ? 'text-gray-500' : 'text-gray-400'}` 
+                            : isDark ? 'text-gray-100' : 'text-gray-900'
                         }`}>
                           {todo.content}
                         </p>
@@ -398,7 +436,9 @@ export default function ChatInterface() {
                         variant="ghost"
                         size="sm"
                         onClick={() => deleteTodo(todo.id)}
-                        className="h-6 w-6 p-0"
+                        className={`h-6 w-6 p-0 ${
+                          isDark ? 'hover:bg-gray-600 text-gray-300' : ''
+                        }`}
                       >
                         ×
                       </Button>
@@ -417,7 +457,11 @@ export default function ChatInterface() {
           <div className="relative flex items-center">
               {/* Plus icon on left */}
               <button
-                className="absolute left-4 z-10 p-1.5 text-black hover:bg-gray-100 rounded-full transition-colors"
+                className={`absolute left-4 z-10 p-1.5 rounded-full transition-colors ${
+                  isDark 
+                    ? 'text-gray-300 hover:bg-gray-700' 
+                    : 'text-black hover:bg-gray-100'
+                }`}
                 aria-label="Attach"
               >
                 <svg
@@ -449,7 +493,11 @@ export default function ChatInterface() {
                 placeholder="Ask anything"
                 disabled={isLoading}
                 rows={1}
-                className="w-full resize-none rounded-full border-0 bg-white pl-12 pr-20 py-4 text-base shadow-md focus:outline-none focus:ring-0 disabled:bg-gray-50 disabled:text-gray-500 placeholder:text-gray-400 placeholder:text-base leading-normal flex items-center"
+                className={`w-full resize-none rounded-full border-0 pl-12 pr-20 py-4 text-base shadow-md focus:outline-none focus:ring-0 placeholder:text-base leading-normal flex items-center ${
+                  isDark
+                    ? 'bg-gray-800 text-gray-100 placeholder:text-gray-500 disabled:bg-gray-700 disabled:text-gray-600'
+                    : 'bg-white text-gray-900 placeholder:text-gray-400 disabled:bg-gray-50 disabled:text-gray-500'
+                }`}
                 style={{
                   minHeight: '56px',
                   maxHeight: '200px',
@@ -465,11 +513,19 @@ export default function ChatInterface() {
               {/* Right side icons */}
               <div className="absolute right-4 flex items-center">
                 {isLoading && (
-                  <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+                  <div className={`w-5 h-5 border-2 rounded-full animate-spin ${
+                    isDark 
+                      ? 'border-gray-600 border-t-gray-300' 
+                      : 'border-gray-300 border-t-gray-600'
+                  }`} />
                 )}
                 {!isLoading && (
                   <button
-                    className="p-1.5 text-black hover:bg-gray-100 rounded-full transition-colors"
+                    className={`p-1.5 rounded-full transition-colors ${
+                      isDark 
+                        ? 'text-gray-300 hover:bg-gray-700' 
+                        : 'text-black hover:bg-gray-100'
+                    }`}
                     aria-label="Voice input"
                   >
                     <svg
@@ -504,9 +560,10 @@ export default function ChatInterface() {
   );
 }
 
-function MessageBubble({ message, isLoading }: { message: Message; isLoading: boolean }) {
+function MessageBubble({ message, isLoading, theme }: { message: Message; isLoading: boolean; theme: 'light' | 'dark' }) {
   const [rawExpanded, setRawExpanded] = useState(false);
   const [toolExpanded, setToolExpanded] = useState(false); // Collapsed by default
+  const isDark = theme === 'dark';
   
   // Don't show badge for user messages or accumulated content
   const showBadge = message.role !== 'user' && message.eventType !== 'content_delta';
@@ -519,37 +576,53 @@ function MessageBubble({ message, isLoading }: { message: Message; isLoading: bo
       <div className={`max-w-3xl w-full ${message.role === 'user' ? 'flex justify-end' : ''}`}>
         {isToolMessage ? (
           // Tool calls: single line, no shadow, subtle background
-          <div className="bg-gray-50/40 border border-gray-200/60 rounded-lg shadow-none py-1.5 px-3">
+          <div className={`border rounded-lg shadow-none py-1.5 px-3 ${
+            isDark 
+              ? 'bg-gray-800/40 border-gray-700/60' 
+              : 'bg-gray-50/40 border-gray-200/60'
+          }`}>
             <button
               onClick={() => setToolExpanded(!toolExpanded)}
-              className="w-full flex items-center justify-between text-left hover:bg-gray-100/30 rounded transition-colors -mx-1 px-1 py-0.5"
+              className={`w-full flex items-center justify-between text-left rounded transition-colors -mx-1 px-1 py-0.5 ${
+                isDark ? 'hover:bg-gray-700/30' : 'hover:bg-gray-100/30'
+              }`}
             >
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500">
+                <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                   {message.eventType === 'tool_call' ? 'Tool' : 'Result'}
                 </span>
-                <span className="text-sm text-gray-600">{message.toolCall?.name}</span>
+                <span className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{message.toolCall?.name}</span>
               </div>
-              <span className="text-xs text-gray-400">
+              <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                 {toolExpanded ? '▼' : '▶'}
               </span>
             </button>
             
             {/* Tool details - shown when expanded */}
             {toolExpanded && message.toolCall && (
-              <div className="space-y-2 pt-2 mt-1 border-t border-gray-200/60">
+              <div className={`space-y-2 pt-2 mt-1 border-t ${
+                isDark ? 'border-gray-700/60' : 'border-gray-200/60'
+              }`}>
                 {message.toolCall.input && Object.keys(message.toolCall.input).length > 0 && (
                   <div>
-                    <div className="text-xs text-gray-500 mb-1">Input</div>
-                    <pre className="text-xs bg-white/60 p-2 rounded border border-gray-200/60 overflow-x-auto font-mono text-gray-700">
+                    <div className={`text-xs mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Input</div>
+                    <pre className={`text-xs p-2 rounded border overflow-x-auto font-mono ${
+                      isDark 
+                        ? 'bg-gray-900/60 border-gray-700/60 text-gray-300' 
+                        : 'bg-white/60 border-gray-200/60 text-gray-700'
+                    }`}>
                       {JSON.stringify(message.toolCall.input, null, 2)}
                     </pre>
                   </div>
                 )}
                 {message.toolCall.result && (
                   <div>
-                    <div className="text-xs text-gray-500 mb-1">Result</div>
-                    <pre className="text-xs bg-white/60 p-2 rounded border border-gray-200/60 overflow-x-auto max-h-60 font-mono text-gray-700">
+                    <div className={`text-xs mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Result</div>
+                    <pre className={`text-xs p-2 rounded border overflow-x-auto max-h-60 font-mono ${
+                      isDark 
+                        ? 'bg-gray-900/60 border-gray-700/60 text-gray-300' 
+                        : 'bg-white/60 border-gray-200/60 text-gray-700'
+                    }`}>
                       {typeof message.toolCall.result === 'string' 
                         ? message.toolCall.result 
                         : JSON.stringify(message.toolCall.result, null, 2)}
@@ -557,15 +630,21 @@ function MessageBubble({ message, isLoading }: { message: Message; isLoading: bo
                   </div>
                 )}
                 {message.raw && (
-                  <div className="pt-2 border-t border-gray-200/60">
+                  <div className={`pt-2 border-t ${isDark ? 'border-gray-700/60' : 'border-gray-200/60'}`}>
                     <button
                       onClick={() => setRawExpanded(!rawExpanded)}
-                      className="text-xs text-gray-400 hover:text-gray-600"
+                      className={`text-xs ${
+                        isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
+                      }`}
                     >
                       {rawExpanded ? '▼' : '▶'} raw
                     </button>
                     {rawExpanded && (
-                      <pre className="text-xs bg-gray-50/60 p-2 rounded border border-gray-200/60 overflow-x-auto max-h-60 font-mono text-gray-600 mt-1">
+                      <pre className={`text-xs p-2 rounded border overflow-x-auto max-h-60 font-mono mt-1 ${
+                        isDark 
+                          ? 'bg-gray-800/60 border-gray-700/60 text-gray-400' 
+                          : 'bg-gray-50/60 border-gray-200/60 text-gray-600'
+                      }`}>
                         {JSON.stringify(message.raw, null, 2)}
                       </pre>
                     )}
@@ -577,18 +656,26 @@ function MessageBubble({ message, isLoading }: { message: Message; isLoading: bo
         ) : (
           <Card className={`${
             message.role === 'user'
-              ? 'bg-black text-white border-black p-4'
+              ? isDark 
+                ? 'bg-blue-600 text-white border-blue-600 p-4'
+                : 'bg-black text-white border-black p-4'
               : message.eventType === 'thinking'
-              ? 'bg-purple-50/30 border-purple-200/40 p-3'
+              ? isDark
+                ? 'bg-purple-900/20 border-purple-700/40 p-3'
+                : 'bg-purple-50/30 border-purple-200/40 p-3'
+              : isDark
+              ? 'bg-gray-800 text-gray-100 border-gray-700 p-4'
               : 'bg-white text-gray-900 border-gray-200 p-4'
           }`}>
             {/* Event Type Badge - for non-tool messages */}
             {showBadge && (
               <div className="mb-2 flex items-center justify-between">
                 <span className={`text-xs px-1.5 py-0.5 rounded ${
-                  message.eventType === 'thinking' ? 'text-purple-600 bg-purple-50' :
-                  message.eventType === 'error' ? 'text-red-600 bg-red-50' :
-                  'text-gray-500 bg-gray-100'
+                  message.eventType === 'thinking' 
+                    ? isDark ? 'text-purple-400 bg-purple-900/30' : 'text-purple-600 bg-purple-50'
+                  : message.eventType === 'error' 
+                    ? isDark ? 'text-red-400 bg-red-900/30' : 'text-red-600 bg-red-50'
+                    : isDark ? 'text-gray-400 bg-gray-700' : 'text-gray-500 bg-gray-100'
                 }`}>
                   {message.eventType === 'thinking' ? 'Thinking' :
                    message.eventType.replace('_', ' ').toUpperCase()}
@@ -596,7 +683,9 @@ function MessageBubble({ message, isLoading }: { message: Message; isLoading: bo
                 {message.raw && (
                   <button
                     onClick={() => setRawExpanded(!rawExpanded)}
-                    className="text-xs text-gray-400 hover:text-gray-600 ml-2"
+                    className={`text-xs ml-2 ${
+                      isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
+                    }`}
                   >
                     {rawExpanded ? '▼' : '▶'} raw
                   </button>
@@ -606,14 +695,18 @@ function MessageBubble({ message, isLoading }: { message: Message; isLoading: bo
             
             {/* Content Display */}
             {message.thinking && (
-              <div className="text-sm text-purple-700/80 whitespace-pre-wrap italic">
+              <div className={`text-sm whitespace-pre-wrap italic ${
+                isDark ? 'text-purple-300/80' : 'text-purple-700/80'
+              }`}>
                 {message.thinking}
               </div>
             )}
             
             {message.content && (
               <div className={`text-base whitespace-pre-wrap ${
-                message.role === 'user' ? 'text-white' : 'text-gray-900'
+                message.role === 'user' 
+                  ? 'text-white' 
+                  : isDark ? 'text-gray-100' : 'text-gray-900'
               }`}>
                 {message.content}
               </div>
@@ -621,9 +714,17 @@ function MessageBubble({ message, isLoading }: { message: Message; isLoading: bo
             
             {/* Raw Event Data (expandable) */}
             {rawExpanded && message.raw && (
-              <div className="mt-3 pt-3 border-t border-gray-200/60">
-                <div className="text-xs font-medium text-gray-500 mb-2">Raw Event Data</div>
-                <pre className="text-xs bg-gray-50/80 p-2 rounded border border-gray-200/60 overflow-x-auto max-h-60 font-mono text-gray-600">
+              <div className={`mt-3 pt-3 border-t ${
+                isDark ? 'border-gray-700/60' : 'border-gray-200/60'
+              }`}>
+                <div className={`text-xs font-medium mb-2 ${
+                  isDark ? 'text-gray-400' : 'text-gray-500'
+                }`}>Raw Event Data</div>
+                <pre className={`text-xs p-2 rounded border overflow-x-auto max-h-60 font-mono ${
+                  isDark 
+                    ? 'bg-gray-900/80 border-gray-700/60 text-gray-400' 
+                    : 'bg-gray-50/80 border-gray-200/60 text-gray-600'
+                }`}>
                   {JSON.stringify(message.raw, null, 2)}
                 </pre>
               </div>
