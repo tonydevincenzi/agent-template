@@ -330,9 +330,16 @@ export default function ChatInterface() {
             {messages.map((message, index) => {
               // Render plain text for regular content messages (no bubble)
               if (message.eventType === 'content_delta' && message.content && !message.toolCall && !message.thinking) {
+                const isStreaming = isLoading && index === messages.length - 1;
                 return (
-                  <div key={message.id} className="max-w-4xl mx-auto">
-                    <div className="text-sm text-gray-900 whitespace-pre-wrap">
+                  <div key={message.id} className="max-w-4xl">
+                    <div 
+                      className="text-base text-gray-900 whitespace-pre-wrap inline-block max-w-full transition-all duration-75 ease-out"
+                      style={{
+                        width: 'fit-content',
+                        maxWidth: '100%',
+                      }}
+                    >
                       {message.content}
                     </div>
                   </div>
@@ -605,7 +612,7 @@ function MessageBubble({ message, isLoading }: { message: Message; isLoading: bo
             )}
             
             {message.content && (
-              <div className={`text-sm whitespace-pre-wrap ${
+              <div className={`text-base whitespace-pre-wrap ${
                 message.role === 'user' ? 'text-white' : 'text-gray-900'
               }`}>
                 {message.content}

@@ -30,7 +30,22 @@ export async function POST(request: NextRequest) {
     }
     
     // Parse request body
-    const { messages } = await request.json();
+    const body = await request.json();
+    
+    // Support both formats: {"message": "..."} and {"messages": [...]}
+    let messages: any[];
+    if (body.messages && Array.isArray(body.messages)) {
+      // Full conversation format
+      messages = body.messages;
+    } else if (body.message && typeof body.message === 'string') {
+      // Simple format - convert to messages array
+      messages = [{ role: 'user', content: body.message }];
+    } else {
+      return NextResponse.json(
+        { error: 'Request must include either "message" (string) or "messages" (array) field' },
+        { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } }
+      );
+    }
     
     // Get the last user message (the current prompt)
     const lastUserMessage = messages
