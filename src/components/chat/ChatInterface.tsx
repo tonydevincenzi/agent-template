@@ -12,7 +12,7 @@ interface Message {
   content?: string;
   toolCall?: ToolCall;
   thinking?: string;
-  eventType: 'user_message' | 'thinking_start' | 'thinking_delta' | 'content_start' | 'content_delta' | 'tool_call_start' | 'tool_call_delta' | 'tool_result' | 'assistant_message' | 'done' | 'error';
+  eventType: 'user_message' | 'thinking_start' | 'thinking_delta' | 'thinking' | 'content_start' | 'content_delta' | 'tool_call_start' | 'tool_call_delta' | 'tool_call' | 'tool_result' | 'assistant_message' | 'done' | 'error';
   timestamp: Date;
   raw?: any; // Store raw event data for debugging
 }
