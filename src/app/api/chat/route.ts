@@ -57,11 +57,6 @@ export async function POST(request: NextRequest) {
     // Build allowed tools list
     const allowedTools: string[] = [];
     
-    // Add web search if enabled in config
-    if (config.webSearch) {
-      allowedTools.push('web_search');
-    }
-    
     // Add custom tools from config
     if (config.tools && config.tools.length > 0) {
       const customTools = config.tools
@@ -70,11 +65,29 @@ export async function POST(request: NextRequest) {
       allowedTools.push(...customTools);
     }
     
+    // Build tools array for Agent SDK
+    const tools: any[] = [];
+    
+    // Add web search tool if enabled
+    if (config.webSearch) {
+      tools.push({
+        type: 'web_search_20250305',
+        name: 'web_search',
+        max_uses: 5, // Limit to 5 searches per request
+      });
+    }
+    
+    // Log configuration for debugging
+    console.log(`[Agent Config] webSearch: ${config.webSearch}, tools: ${tools.length}, allowedTools: ${allowedTools.join(', ')}`);
+    
     // Configure Agent SDK options
     const options: any = {
       systemPrompt,
-      // Set allowed tools (only if we have any)
-      allowedTools: allowedTools.length > 0 ? allowedTools : undefined,
+      // Include web search tool in tools array if enabled
+      tools: tools.length > 0 ? tools : undefined,
+      // Set allowed tools only if we have custom tools AND web search is disabled
+      // If web search is enabled, don't restrict allowedTools to allow built-in tools
+      allowedTools: (!config.webSearch && allowedTools.length > 0) ? allowedTools : undefined,
       // Configure MCP servers if provided
       mcpServers: config.mcps && config.mcps.length > 0
         ? config.mcps
@@ -84,8 +97,45 @@ export async function POST(request: NextRequest) {
               return acc;
             }, {})
         : undefined,
-      // Set permission mode
-      permissionMode: 'default',
+      // Set permission mode - use 'bypassPermissions' if web search is enabled to allow tool usage
+      permissionMode: config.webSearch ? 'bypassPermissions' : 'default',
+      // Explicitly allow web search tool if enabled - handle all possible tool name variations
+      canUseTool: config.webSearch
+        ? async (toolName: string, input: any) => {
+            console.log(`[canUseTool] Tool requested: ${toolName}`);
+            // Allow web search tool variations when enabled
+            const webSearchVariants = [
+              'web_search',
+              'web_search_20250305',
+              'WebSearch',
+              'webSearch',
+              'web-search',
+              'websearch'
+            ];
+            const normalizedToolName = toolName.toLowerCase().replace(/[-_]/g, '');
+            const isWebSearch = webSearchVariants.some(variant => 
+              variant.toLowerCase().replace(/[-_]/g, '') === normalizedToolName
+            );
+            
+            if (isWebSearch) {
+              console.log(`[canUseTool] Allowing web search tool: ${toolName}`);
+              return { behavior: 'allow' as const, updatedInput: input };
+            }
+            // Allow other tools from config
+            if (allowedTools.includes(toolName)) {
+              console.log(`[canUseTool] Allowing configured tool: ${toolName}`);
+              return { behavior: 'allow' as const, updatedInput: input };
+            }
+            // For bypassPermissions mode, allow all other tools too
+            if (config.webSearch) {
+              console.log(`[canUseTool] Allowing tool in bypassPermissions mode: ${toolName}`);
+              return { behavior: 'allow' as const, updatedInput: input };
+            }
+            // Deny by default for unknown tools
+            console.log(`[canUseTool] Denying unknown tool: ${toolName}`);
+            return { behavior: 'deny' as const, message: `Tool ${toolName} is not permitted` };
+          }
+        : undefined,
     };
     
     // Create query with the full prompt
@@ -109,13 +159,11 @@ export async function POST(request: NextRequest) {
             .map((part: any) => part.text || '');
           assistantMessage = textParts.join('');
         }
-      } else if (message.type === 'partial_assistant') {
+      } else if (message.type === 'stream_event') {
         // Handle streaming partial messages
-        if (message.content && Array.isArray(message.content)) {
-          const textParts = message.content
-            .filter((part: any) => part.type === 'text')
-            .map((part: any) => part.text || '');
-          assistantMessage += textParts.join('');
+        const streamMsg = message as any;
+        if (streamMsg.event?.delta?.type === 'text_delta' && streamMsg.event.delta.text) {
+          assistantMessage += streamMsg.event.delta.text;
         }
       }
     }
