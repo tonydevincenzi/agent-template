@@ -1,7 +1,6 @@
 'use client';
 
-import { useState } from 'react';
-import { getAgentConfig } from '@/lib/config';
+import { useState, useEffect } from 'react';
 
 // This runs client-side, so we'll fetch config via API
 export default function Home() {
@@ -11,12 +10,12 @@ export default function Home() {
   const [agentName, setAgentName] = useState('AI Agent');
 
   // Fetch agent config on mount
-  useState(() => {
+  useEffect(() => {
     fetch('/api/config')
       .then(r => r.json())
       .then(data => setAgentName(data.name))
       .catch(console.error);
-  });
+  }, []);
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
