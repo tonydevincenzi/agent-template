@@ -3,6 +3,18 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import { getAgentConfig } from '@/lib/config';
 import type { SDKAssistantMessage } from '@anthropic-ai/claude-agent-sdk';
 
+// Enable CORS for internal prototyping
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const config = getAgentConfig();
@@ -13,7 +25,7 @@ export async function POST(request: NextRequest) {
       console.error('ANTHROPIC_API_KEY is not set or is empty in environment variables');
       return NextResponse.json(
         { error: 'ANTHROPIC_API_KEY is not configured. Please check environment variables.' },
-        { status: 500 }
+        { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } }
       );
     }
     
@@ -28,7 +40,7 @@ export async function POST(request: NextRequest) {
     if (!lastUserMessage) {
       return NextResponse.json(
         { error: 'No user message found in request' },
-        { status: 400 }
+        { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } }
       );
     }
     
@@ -77,8 +89,8 @@ export async function POST(request: NextRequest) {
       });
     }
     
-    // Get model from environment or use Claude Sonnet 4.5 as default
-    const model = process.env.CLAUDE_MODEL || 'claude-sonnet-4-5-20250929';
+    // Get model from config, fallback to Haiku
+    const model = config.model || 'claude-haiku-4-5-20251001';
     
     // Log configuration for debugging
     console.log(`[Agent Config] model: ${model}, webSearch: ${config.webSearch}, tools: ${tools.length}, allowedTools: ${allowedTools.join(', ')}`);
@@ -389,19 +401,20 @@ export async function POST(request: NextRequest) {
       },
     });
     
-    // Return streaming response
+    // Return streaming response with CORS headers
     return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
       },
     });
   } catch (error: any) {
     console.error('Error in chat API:', error);
     return NextResponse.json(
       { error: error.message || 'Failed to process request' },
-      { status: 500 }
+      { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } }
     );
   }
 }

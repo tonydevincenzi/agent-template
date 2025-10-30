@@ -36,7 +36,7 @@ export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [agentName, setAgentName] = useState('AI Agent');
+  const [agentConfig, setAgentConfig] = useState<any>(null);
   const [todos, setTodos] = useState<TodoItem[]>([]);
   const [showTodos, setShowTodos] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -47,7 +47,7 @@ export default function ChatInterface() {
     fetch('/api/config')
       .then(r => r.json())
       .then(data => {
-        setAgentName(data.name);
+        setAgentConfig(data);
         if (data.uiCustomization?.todoListVisible !== undefined) {
           setShowTodos(data.uiCustomization.todoListVisible);
         }
@@ -303,11 +303,25 @@ export default function ChatInterface() {
           {/* Gradient fadeout at bottom - fades content under input */}
           <div className="fixed bottom-0 left-0 right-0 h-40 pointer-events-none z-40 bg-gradient-to-t from-gray-50 via-gray-50/80 to-transparent" />
           <div className="max-w-4xl mx-auto px-4 space-y-6 relative z-10 min-h-full flex flex-col">
-            {messages.length === 0 && (
-              <div className="flex-1 flex items-center justify-center text-center text-gray-500">
-                <div>
-                  <p className="text-lg mb-2">Start a conversation</p>
-                  <p className="text-sm">Ask me anything, and I'll help you!</p>
+            {messages.length === 0 && agentConfig && (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="w-full max-w-2xl space-y-3 text-gray-400 text-sm text-center">
+                  <div>{agentConfig.name}</div>
+                  <div>{agentConfig.model || 'Model not specified'}</div>
+                  {(() => {
+                    const toolsList: string[] = [];
+                    if (agentConfig.webSearch) toolsList.push('Web Search');
+                    if (agentConfig.tools?.filter((t: any) => t.enabled).length > 0) {
+                      toolsList.push(...agentConfig.tools.filter((t: any) => t.enabled).map((t: any) => t.name));
+                    }
+                    if (agentConfig.mcps?.filter((mcp: any) => mcp.enabled).length > 0) {
+                      toolsList.push(...agentConfig.mcps.filter((mcp: any) => mcp.enabled).map((mcp: any) => mcp.name));
+                    }
+                    return toolsList.length > 0 ? <div>{toolsList.join(', ')}</div> : null;
+                  })()}
+                  {agentConfig.rules && agentConfig.rules.length > 0 && (
+                    <div>{agentConfig.rules.length} rule{agentConfig.rules.length !== 1 ? 's' : ''}</div>
+                  )}
                 </div>
               </div>
             )}
