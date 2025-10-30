@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { Composio } from 'composio-core';
 import { getAgentConfig } from '@/lib/config';
 
 export async function POST(request: NextRequest) {
@@ -15,18 +14,16 @@ export async function POST(request: NextRequest) {
     // Initialize tools array
     const tools: any[] = [];
     
-    // Initialize Composio with user's connected apps
-    if (config.connectedApps?.length && process.env.COMPOSIO_API_KEY) {
-      try {
-        const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY });
-        const composioTools = await composio.getTools({
-          apps: config.connectedApps
-        });
-        tools.push(...composioTools);
-      } catch (error) {
-        console.error('Error loading Composio tools:', error);
-      }
-    }
+    // TODO: Initialize Composio with user's connected apps
+    // Composio integration temporarily disabled - need to fix SDK API usage
+    // if (config.connectedApps?.length && process.env.COMPOSIO_API_KEY) {
+    //   try {
+    //     const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY });
+    //     // Need to use correct Composio SDK API
+    //   } catch (error) {
+    //     console.error('Error loading Composio tools:', error);
+    //   }
+    // }
     
     // Parse request body
     const { messages } = await request.json();
