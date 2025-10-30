@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { createSession, logMessage, isLoggingEnabled } from '@/lib/platformLogger';
 
 interface Message {
   id: string;
@@ -40,9 +41,24 @@ export default function ChatInterface() {
   const [todos, setTodos] = useState<TodoItem[]>([]);
   const [showTodos, setShowTodos] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Initialize session on first load
+  useEffect(() => {
+    const initSession = async () => {
+      if (isLoggingEnabled()) {
+        const sessionId = await createSession();
+        setSessionId(sessionId);
+      } else {
+        console.log('[Platform Logger] Session logging disabled - env vars not set');
+      }
+    };
+    
+    initSession();
+  }, []);
 
   // Load config and initialize theme
   useEffect(() => {
@@ -112,8 +128,14 @@ export default function ChatInterface() {
     };
     
     setMessages(prev => [...prev, userMessage]);
+    const userMessageContent = input;
     setInput('');
     setIsLoading(true);
+
+    // Log user message to platform
+    if (sessionId && userMessageContent) {
+      await logMessage(sessionId, 'user', userMessageContent);
+    }
 
     try {
       const response = await fetch('/api/chat', {
@@ -142,6 +164,7 @@ export default function ChatInterface() {
       // Track accumulated content and current message ID for content deltas
       let contentAccumulator = '';
       let contentMessageId: string | null = null;
+      let responseMetadata: { model?: string; inputTokens?: number; outputTokens?: number } = {};
 
       while (true) {
         const { done, value } = await reader.read();
@@ -229,8 +252,23 @@ export default function ChatInterface() {
                 setMessages(prev => [...prev, toolResultMessage]);
                 setTimeout(() => scrollToBottom(), 0);
               }
-              // Skip done and assistant events - they duplicate accumulated content
+              // Handle done and assistant events - capture metadata
               else if (data.type === 'done' || data.type === 'assistant') {
+                // Capture metadata from the response
+                if (data.model) {
+                  responseMetadata.model = data.model;
+                }
+                if (data.usage || data.metadata?.usage) {
+                  const usage = data.usage || data.metadata?.usage;
+                  responseMetadata.inputTokens = usage.input_tokens;
+                  responseMetadata.outputTokens = usage.output_tokens;
+                }
+                
+                // Log assistant message to platform with metadata
+                if (sessionId && contentAccumulator) {
+                  await logMessage(sessionId, 'assistant', contentAccumulator, responseMetadata);
+                }
+                
                 // Reset content accumulator for next response
                 contentAccumulator = '';
                 contentMessageId = null;

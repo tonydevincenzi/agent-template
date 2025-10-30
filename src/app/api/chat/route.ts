@@ -192,6 +192,7 @@ export async function POST(request: NextRequest) {
         const toolCalls: Array<{ id: string; name: string; input: any; result?: any; status: string; timestamp: number }> = [];
         const toolCallsMap: Map<string, number> = new Map(); // Map tool ID to array index
         let finalMessage: SDKAssistantMessage | null = null;
+        let usageMetadata: { input_tokens?: number; output_tokens?: number } = {};
         
         const sendChunk = (data: any) => {
           try {
@@ -290,8 +291,16 @@ export async function POST(request: NextRequest) {
               // Handle message_delta events (metadata updates only - NOT text content)
               // Text content comes via content_block_delta above, processing here causes duplicates
               if (event?.type === 'message_delta' && event.delta) {
-                // Skip text processing - it's already handled by content_block_delta
-                // This event is only for metadata like stop_reason, usage, etc.
+                // Capture usage metadata if available
+                if (event.delta.usage || event.usage) {
+                  const usage = event.delta.usage || event.usage;
+                  if (usage.input_tokens !== undefined) {
+                    usageMetadata.input_tokens = usage.input_tokens;
+                  }
+                  if (usage.output_tokens !== undefined) {
+                    usageMetadata.output_tokens = usage.output_tokens;
+                  }
+                }
               }
             }
             
@@ -310,6 +319,17 @@ export async function POST(request: NextRequest) {
               // Extract model info if available
               const modelInfo = (finalMessage as any).model || model || 'default';
               console.log(`[Agent] Using model: ${modelInfo}`);
+              
+              // Extract usage information from final message
+              const messageUsage = (finalMessage as any).usage;
+              if (messageUsage) {
+                if (messageUsage.input_tokens !== undefined) {
+                  usageMetadata.input_tokens = messageUsage.input_tokens;
+                }
+                if (messageUsage.output_tokens !== undefined) {
+                  usageMetadata.output_tokens = messageUsage.output_tokens;
+                }
+              }
               
               // Extract text content
               if (finalMessage.message?.content && Array.isArray(finalMessage.message.content)) {
@@ -366,6 +386,7 @@ export async function POST(request: NextRequest) {
                     thinking: thinking || undefined,
                     toolCalls: toolCalls.length > 0 ? [...toolCalls] : undefined,
                     model: modelInfo,
+                    usage: Object.keys(usageMetadata).length > 0 ? usageMetadata : undefined,
                   });
                 }
               }
@@ -403,6 +424,8 @@ export async function POST(request: NextRequest) {
             content: assistantMessage,
             thinking: thinking || undefined,
             toolCalls: toolCalls.length > 0 ? [...toolCalls] : undefined,
+            model: model,
+            usage: Object.keys(usageMetadata).length > 0 ? usageMetadata : undefined,
           });
           
         } catch (error: any) {
