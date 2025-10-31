@@ -68,8 +68,14 @@ export default function ChatInterface() {
   const [showConfig, setShowConfig] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isEmbedded, setIsEmbedded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Check if embedded in iframe
+  useEffect(() => {
+    setIsEmbedded(window.self !== window.top);
+  }, []);
 
   // Initialize session on first load
   useEffect(() => {
@@ -349,24 +355,26 @@ export default function ChatInterface() {
 
   return (
     <div className={`flex h-screen relative ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
-      {/* Config Button - Top Right */}
-      <button
-        onClick={() => setShowConfig(!showConfig)}
-        className={`fixed top-4 right-4 z-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-          isDark
-            ? 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
-            : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
-        } shadow-sm`}
-        title="View agent configuration"
-      >
-        <span className="flex items-center gap-2">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M8 10a2 2 0 100-4 2 2 0 000 4z" stroke="currentColor" strokeWidth="1.5"/>
-            <path d="M13 8a5 5 0 11-10 0 5 5 0 0110 0z" stroke="currentColor" strokeWidth="1.5"/>
-          </svg>
-          Config
-        </span>
-      </button>
+      {/* Config Button - Top Left (only shown when embedded) */}
+      {isEmbedded && (
+        <button
+          onClick={() => setShowConfig(!showConfig)}
+          className={`fixed top-4 left-4 z-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            isDark
+              ? 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
+              : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
+          } shadow-sm`}
+          title="View agent configuration"
+        >
+          <span className="flex items-center gap-2">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 10a2 2 0 100-4 2 2 0 000 4z" stroke="currentColor" strokeWidth="1.5"/>
+              <path d="M13 8a5 5 0 11-10 0 5 5 0 0110 0z" stroke="currentColor" strokeWidth="1.5"/>
+            </svg>
+            Config
+          </span>
+        </button>
+      )}
 
       {/* Config Modal */}
       {showConfig && (
