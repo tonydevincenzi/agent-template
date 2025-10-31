@@ -35,12 +35,17 @@ export interface AgentConfig {
 // Cache configuration for performance
 let cachedConfig: AgentConfig | null = null;
 let lastFetchTime = 0;
-const CACHE_DURATION = 30000; // 30 seconds
+const CACHE_DURATION = 10000; // 10 seconds - faster updates, still performant
 
 /**
  * Fetches agent configuration from the platform API
- * Configuration is cached for 30 seconds for performance
+ * Configuration is cached for 10 seconds for performance
  * Falls back to default config if platform is unavailable
+ * 
+ * To get updates instantly without waiting:
+ * - Hard refresh browser (Cmd+Shift+R)
+ * - Click "Refresh Config" button in UI
+ * - Open new tab/session
  */
 export async function getAgentConfig(): Promise<AgentConfig> {
   const now = Date.now();
