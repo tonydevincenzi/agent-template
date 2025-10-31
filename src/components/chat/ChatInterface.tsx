@@ -33,16 +33,28 @@ interface TodoItem {
 }
 
 interface AgentConfig {
-  name?: string;
-  model?: string;
-  systemPrompt?: string;
-  tools?: Array<{ name: string; enabled: boolean }>;
-  webSearch?: boolean;
-  mcps?: Array<{ name: string; enabled: boolean }>;
-  rules?: string[];
+  agent?: {
+    name: string;
+    systemPrompt: string;
+    model: string;
+    rules: string[];
+  };
+  services?: {
+    webSearch: boolean;
+    tools: Array<{ id: string; name: string; description: string; enabled: boolean }>;
+    mcps: Array<{ name: string; url: string; enabled: boolean }>;
+  };
   uiCustomization?: {
     todoListVisible?: boolean;
     theme?: 'light' | 'dark';
+    chatLayout?: string;
+    filesystemVisible?: boolean;
+    toolCallsView?: string;
+    primaryColor?: string;
+  };
+  _debug?: {
+    deploymentId?: string;
+    lastUpdated?: string;
   };
 }
 
@@ -445,21 +457,21 @@ export default function ChatInterface() {
                 <div className={`w-full max-w-2xl space-y-3 text-sm text-center ${
                   isDark ? 'text-gray-500' : 'text-gray-400'
                 }`}>
-                  <div>{agentConfig.name}</div>
-                  <div>{agentConfig.model || 'Model not specified'}</div>
+                  <div>{agentConfig.agent?.name || 'AI Agent'}</div>
+                  <div>{agentConfig.agent?.model || 'Model not specified'}</div>
                   {(() => {
                     const toolsList: string[] = [];
-                    if (agentConfig.webSearch) toolsList.push('Web Search');
-                    if (agentConfig.tools && agentConfig.tools.filter(t => t.enabled).length > 0) {
-                      toolsList.push(...agentConfig.tools.filter(t => t.enabled).map(t => t.name));
+                    if (agentConfig.services?.webSearch) toolsList.push('Web Search');
+                    if (agentConfig.services?.tools && agentConfig.services.tools.filter(t => t.enabled).length > 0) {
+                      toolsList.push(...agentConfig.services.tools.filter(t => t.enabled).map(t => t.name));
                     }
-                    if (agentConfig.mcps && agentConfig.mcps.filter(mcp => mcp.enabled).length > 0) {
-                      toolsList.push(...agentConfig.mcps.filter(mcp => mcp.enabled).map(mcp => mcp.name));
+                    if (agentConfig.services?.mcps && agentConfig.services.mcps.filter(mcp => mcp.enabled).length > 0) {
+                      toolsList.push(...agentConfig.services.mcps.filter(mcp => mcp.enabled).map(mcp => mcp.name));
                     }
                     return toolsList.length > 0 ? <div>{toolsList.join(', ')}</div> : null;
                   })()}
-                  {agentConfig.rules && agentConfig.rules.length > 0 && (
-                    <div>{agentConfig.rules.length} rule{agentConfig.rules.length !== 1 ? 's' : ''}</div>
+                  {agentConfig.agent?.rules && agentConfig.agent.rules.length > 0 && (
+                    <div>{agentConfig.agent.rules.length} rule{agentConfig.agent.rules.length !== 1 ? 's' : ''}</div>
                   )}
                 </div>
               </div>

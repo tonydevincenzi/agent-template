@@ -2,24 +2,34 @@
 // Config is fetched from the platform API at runtime, allowing changes without redeployment
 
 export interface AgentConfig {
-  name: string;
-  systemPrompt: string;
-  model: string;
-  rules?: string[];
-  tools: Array<{ id: string; name: string; description: string; enabled: boolean }>;
-  webSearch: boolean;
-  connectedApps: string[]; // Composio app keys
-  mcps: Array<{ name: string; url: string; enabled: boolean }>;
+  agent: {
+    name: string;
+    systemPrompt: string;
+    model: string;
+    rules: string[];
+  };
+  services: {
+    webSearch: boolean;
+    webSearchProvider?: string;
+    browserProvider?: string;
+    codeExecutionProvider?: string;
+    fileSystemProvider?: string;
+    emailProvider?: string;
+    tools: Array<{ id: string; name: string; description: string; enabled: boolean }>;
+    connectedApps: string[];
+    enabledSkills: string[];
+    mcps: Array<{ name: string; url: string; enabled: boolean }>;
+  };
   uiCustomization: {
     chatLayout: string;
     filesystemVisible: boolean;
     todoListVisible: boolean;
     toolCallsView: string;
-    theme: string;
+    theme: 'light' | 'dark';
     primaryColor: string;
   };
-  deploymentId?: string;
-  lastUpdated?: string;
+  deploymentId: string;
+  lastUpdated: string;
 }
 
 // Cache configuration for performance
@@ -49,11 +59,19 @@ export async function getAgentConfig(): Promise<AgentConfig> {
   }
   
   try {
-    const response = await fetch(`${platformUrl}/api/deployments/${deploymentId}/config`, {
+    const configUrl = `${platformUrl}/api/deployments/${deploymentId}/config`;
+    console.log('[Config] Fetching from:', configUrl);
+    
+    const response = await fetch(configUrl, {
       next: { revalidate: 30 }, // Next.js cache revalidation
+      cache: 'no-store', // Don't cache during development
     });
     
+    console.log('[Config] Response status:', response.status);
+    
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[Config] API error response:', errorText.substring(0, 200));
       throw new Error(`Config API returned ${response.status}`);
     }
     
@@ -61,10 +79,14 @@ export async function getAgentConfig(): Promise<AgentConfig> {
     cachedConfig = config;
     lastFetchTime = now;
     
-    console.log('✅ Agent config loaded from platform');
+    console.log('✅ Agent config loaded from platform:', {
+      name: config.agent?.name,
+      hasPrompt: !!config.agent?.systemPrompt,
+      deploymentId: config.deploymentId
+    });
     return config;
   } catch (error) {
-    console.error('Failed to fetch agent config from platform:', error);
+    console.error('❌ Failed to fetch agent config from platform:', error);
     
     // Fall back to cached config if available
     if (cachedConfig) {
@@ -83,23 +105,30 @@ export async function getAgentConfig(): Promise<AgentConfig> {
  * This ensures the agent works even if the platform API is unavailable
  */
 function getDefaultConfig(): AgentConfig {
-    return {
+  return {
+    agent: {
       name: 'AI Agent',
       systemPrompt: 'You are a helpful AI assistant.',
       model: 'claude-haiku-4-5-20251001',
       rules: [],
-      tools: [],
+    },
+    services: {
       webSearch: false,
+      tools: [],
       connectedApps: [],
+      enabledSkills: [],
       mcps: [],
-      uiCustomization: {
-        chatLayout: 'single',
-        filesystemVisible: false,
-        todoListVisible: false,
-        toolCallsView: 'compact',
-        theme: 'light',
-        primaryColor: '#0084ff'
-      }
-    };
+    },
+    uiCustomization: {
+      chatLayout: 'single',
+      filesystemVisible: false,
+      todoListVisible: false,
+      toolCallsView: 'compact',
+      theme: 'light',
+      primaryColor: '#0084ff',
+    },
+    deploymentId: '',
+    lastUpdated: new Date().toISOString(),
+  };
 }
 

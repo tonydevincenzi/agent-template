@@ -60,9 +60,9 @@ export async function POST(request: NextRequest) {
     }
     
     // Build system prompt with rules
-    let systemPrompt = config.systemPrompt;
-    if (config.rules && config.rules.length > 0) {
-      systemPrompt += '\n\nRules:\n' + config.rules.map(rule => `- ${rule}`).join('\n');
+    let systemPrompt = config.agent.systemPrompt;
+    if (config.agent.rules && config.agent.rules.length > 0) {
+      systemPrompt += '\n\nRules:\n' + config.agent.rules.map(rule => `- ${rule}`).join('\n');
     }
     
     // Build conversation context from previous messages
@@ -85,8 +85,8 @@ export async function POST(request: NextRequest) {
     const allowedTools: string[] = [];
     
     // Add custom tools from config
-    if (config.tools && config.tools.length > 0) {
-      const customTools = config.tools
+    if (config.services.tools && config.services.tools.length > 0) {
+      const customTools = config.services.tools
         .filter(tool => tool.enabled)
         .map(tool => tool.name);
       allowedTools.push(...customTools);
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
     const tools: Array<{ type: string; name: string; max_uses?: number }> = [];
     
     // Add web search tool if enabled
-    if (config.webSearch) {
+    if (config.services.webSearch) {
       tools.push({
         type: 'web_search_20250305',
         name: 'web_search',
@@ -105,10 +105,10 @@ export async function POST(request: NextRequest) {
     }
     
     // Get model from config, fallback to Haiku
-    const model = config.model || 'claude-haiku-4-5-20251001';
+    const model = config.agent.model || 'claude-haiku-4-5-20251001';
     
     // Log configuration for debugging
-    console.log(`[Agent Config] model: ${model}, webSearch: ${config.webSearch}, tools: ${tools.length}, allowedTools: ${allowedTools.join(', ')}`);
+    console.log(`[Agent Config] model: ${model}, webSearch: ${config.services.webSearch}, tools: ${tools.length}, allowedTools: ${allowedTools.join(', ')}`);
     
     // Configure Agent SDK options
     const options = {
@@ -125,10 +125,10 @@ export async function POST(request: NextRequest) {
       tools: tools.length > 0 ? tools : undefined,
       // Set allowed tools only if we have custom tools AND web search is disabled
       // If web search is enabled, don't restrict allowedTools to allow built-in tools
-      allowedTools: (!config.webSearch && allowedTools.length > 0) ? allowedTools : undefined,
+      allowedTools: (!config.services.webSearch && allowedTools.length > 0) ? allowedTools : undefined,
       // Configure MCP servers if provided
-      mcpServers: config.mcps && config.mcps.length > 0
-        ? config.mcps
+      mcpServers: config.services.mcps && config.services.mcps.length > 0
+        ? config.services.mcps
             .filter(mcp => mcp.enabled)
             .reduce((acc: Record<string, { type: 'http'; url: string }>, mcp) => {
               acc[mcp.name] = { type: 'http' as const, url: mcp.url };
@@ -136,9 +136,9 @@ export async function POST(request: NextRequest) {
             }, {})
         : undefined,
       // Set permission mode - use 'bypassPermissions' if web search is enabled to allow tool usage
-      permissionMode: (config.webSearch ? 'bypassPermissions' : 'default') as 'bypassPermissions' | 'default',
+      permissionMode: (config.services.webSearch ? 'bypassPermissions' : 'default') as 'bypassPermissions' | 'default',
       // Explicitly allow web search tool if enabled - handle all possible tool name variations
-      canUseTool: config.webSearch
+      canUseTool: config.services.webSearch
         ? async (toolName: string, input: unknown) => {
             console.log(`[canUseTool] Tool requested: ${toolName}`);
             // Allow web search tool variations when enabled
@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
               return { behavior: 'allow' as const, updatedInput: input as Record<string, unknown> };
             }
             // For bypassPermissions mode, allow all other tools too
-            if (config.webSearch) {
+            if (config.services.webSearch) {
               console.log(`[canUseTool] Allowing tool in bypassPermissions mode: ${toolName}`);
               return { behavior: 'allow' as const, updatedInput: input as Record<string, unknown> };
             }
