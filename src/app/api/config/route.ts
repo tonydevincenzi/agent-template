@@ -3,7 +3,7 @@ import { getAgentConfig } from '@/lib/config';
 
 export async function GET() {
   try {
-    const config = getAgentConfig();
+    const config = await getAgentConfig();
     
     return NextResponse.json({
       name: config.name || 'Agent',
@@ -23,7 +23,7 @@ export async function GET() {
         toolCallsView: 'compact'
       }
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: 'Failed to load config' },
       { status: 500 }

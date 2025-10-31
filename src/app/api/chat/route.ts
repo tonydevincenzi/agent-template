@@ -4,7 +4,7 @@ import { getAgentConfig } from '@/lib/config';
 import type { SDKAssistantMessage } from '@anthropic-ai/claude-agent-sdk';
 
 // Enable CORS for internal prototyping
-export async function OPTIONS(request: NextRequest) {
+export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,
     headers: {
@@ -17,7 +17,7 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const config = getAgentConfig();
+    const config = await getAgentConfig();
     
     // Check if API key is available
     const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     
     // Support both formats: {"message": "..."} and {"messages": [...]}
-    let messages: any[];
+    let messages: Array<{ role: string; content: string }>;
     if (body.messages && Array.isArray(body.messages)) {
       // Full conversation format
       messages = body.messages;
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     
     // Get the last user message (the current prompt)
     const lastUserMessage = messages
-      .filter((msg: any) => msg.role === 'user')
+      .filter((msg) => msg.role === 'user')
       .pop();
     
     if (!lastUserMessage) {
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     if (messages.length > 1) {
       const previousMessages = messages.slice(0, -1);
       conversationContext = previousMessages
-        .map((msg: any) => {
+        .map((msg) => {
           const role = msg.role === 'user' ? 'User' : 'Assistant';
           return `${role}: ${msg.content}`;
         })
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Build tools array for Agent SDK
-    const tools: any[] = [];
+    const tools: Array<{ type: string; name: string; max_uses?: number }> = [];
     
     // Add web search tool if enabled
     if (config.webSearch) {
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
     console.log(`[Agent Config] model: ${model}, webSearch: ${config.webSearch}, tools: ${tools.length}, allowedTools: ${allowedTools.join(', ')}`);
     
     // Configure Agent SDK options
-    const options: any = {
+    const options = {
       systemPrompt,
       // Model configuration - default is Claude Sonnet 4.5
       // Can be overridden via CLAUDE_MODEL environment variable
@@ -130,16 +130,16 @@ export async function POST(request: NextRequest) {
       mcpServers: config.mcps && config.mcps.length > 0
         ? config.mcps
             .filter(mcp => mcp.enabled)
-            .reduce((acc: any, mcp) => {
+            .reduce((acc: Record<string, { type: 'http'; url: string }>, mcp) => {
               acc[mcp.name] = { type: 'http' as const, url: mcp.url };
               return acc;
             }, {})
         : undefined,
       // Set permission mode - use 'bypassPermissions' if web search is enabled to allow tool usage
-      permissionMode: config.webSearch ? 'bypassPermissions' : 'default',
+      permissionMode: (config.webSearch ? 'bypassPermissions' : 'default') as 'bypassPermissions' | 'default',
       // Explicitly allow web search tool if enabled - handle all possible tool name variations
       canUseTool: config.webSearch
-        ? async (toolName: string, input: any) => {
+        ? async (toolName: string, input: unknown) => {
             console.log(`[canUseTool] Tool requested: ${toolName}`);
             // Allow web search tool variations when enabled
             const webSearchVariants = [
@@ -157,17 +157,17 @@ export async function POST(request: NextRequest) {
             
             if (isWebSearch) {
               console.log(`[canUseTool] Allowing web search tool: ${toolName}`);
-              return { behavior: 'allow' as const, updatedInput: input };
+              return { behavior: 'allow' as const, updatedInput: input as Record<string, unknown> };
             }
             // Allow other tools from config
             if (allowedTools.includes(toolName)) {
               console.log(`[canUseTool] Allowing configured tool: ${toolName}`);
-              return { behavior: 'allow' as const, updatedInput: input };
+              return { behavior: 'allow' as const, updatedInput: input as Record<string, unknown> };
             }
             // For bypassPermissions mode, allow all other tools too
             if (config.webSearch) {
               console.log(`[canUseTool] Allowing tool in bypassPermissions mode: ${toolName}`);
-              return { behavior: 'allow' as const, updatedInput: input };
+              return { behavior: 'allow' as const, updatedInput: input as Record<string, unknown> };
             }
             // Deny by default for unknown tools
             console.log(`[canUseTool] Denying unknown tool: ${toolName}`);
@@ -189,12 +189,12 @@ export async function POST(request: NextRequest) {
         let assistantMessage = '';
         let thinking = '';
         // Store tool calls in chronological order - use array to maintain order
-        const toolCalls: Array<{ id: string; name: string; input: any; result?: any; status: string; timestamp: number }> = [];
+        const toolCalls: Array<{ id: string; name: string; input: Record<string, unknown>; result?: unknown; status: string; timestamp: number }> = [];
         const toolCallsMap: Map<string, number> = new Map(); // Map tool ID to array index
         let finalMessage: SDKAssistantMessage | null = null;
-        let usageMetadata: { input_tokens?: number; output_tokens?: number } = {};
+        const usageMetadata: { input_tokens?: number; output_tokens?: number } = {};
         
-        const sendChunk = (data: any) => {
+        const sendChunk = (data: Record<string, unknown>) => {
           try {
             const chunk = encoder.encode(`data: ${JSON.stringify(data)}\n\n`);
             controller.enqueue(chunk);
@@ -209,7 +209,7 @@ export async function POST(request: NextRequest) {
             // Handle partial assistant messages (streaming) - this is the key for real-time streaming
             // With includePartialMessages: true, we get stream_event messages as they're generated
             if (message.type === 'stream_event') {
-              const streamMsg = message as any;
+              const streamMsg = message as { event?: { type?: string; content_block?: { type?: string }; delta?: { type?: string; thinking?: string; text?: string; tool_use_id?: string; id?: string; name?: string; input?: unknown; usage?: { input_tokens?: number; output_tokens?: number } }; usage?: { input_tokens?: number; output_tokens?: number } } };
               const event = streamMsg.event;
               
               // According to SDK docs, events can be: content_block_delta, message_delta, etc.
@@ -255,21 +255,21 @@ export async function POST(request: NextRequest) {
                   const toolId = delta.tool_use_id || delta.id;
                   if (toolId) {
                     const existingIndex = toolCallsMap.get(toolId);
-                    let toolCall: any;
+                    let toolCall: { id: string; name: string; input: Record<string, unknown>; status: string; timestamp: number };
                     
                     if (existingIndex !== undefined) {
                       // Update existing tool call
                       toolCall = toolCalls[existingIndex];
                       if (delta.name) toolCall.name = delta.name;
                       if (delta.input) {
-                        toolCall.input = { ...toolCall.input, ...delta.input };
+                        toolCall.input = { ...toolCall.input, ...(delta.input as Record<string, unknown>) };
                       }
                     } else {
                       // Create new tool call and add to timeline in chronological order
                       toolCall = {
                         id: toolId,
                         name: delta.name || '',
-                        input: delta.input || {},
+                        input: (delta.input as Record<string, unknown>) || ({} as Record<string, unknown>),
                         status: 'pending',
                         timestamp: Date.now(),
                       };
@@ -294,10 +294,10 @@ export async function POST(request: NextRequest) {
                 // Capture usage metadata if available
                 if (event.delta.usage || event.usage) {
                   const usage = event.delta.usage || event.usage;
-                  if (usage.input_tokens !== undefined) {
+                  if (usage && usage.input_tokens !== undefined) {
                     usageMetadata.input_tokens = usage.input_tokens;
                   }
-                  if (usage.output_tokens !== undefined) {
+                  if (usage && usage.output_tokens !== undefined) {
                     usageMetadata.output_tokens = usage.output_tokens;
                   }
                 }
@@ -306,7 +306,7 @@ export async function POST(request: NextRequest) {
             
             // Handle system messages that might contain model info
             if (message.type === 'system') {
-              const systemMsg = message as any;
+              const systemMsg = message as { model?: string };
               if (systemMsg.model) {
                 console.log(`[Agent] Model from system message: ${systemMsg.model}`);
               }
@@ -317,11 +317,11 @@ export async function POST(request: NextRequest) {
               finalMessage = message as SDKAssistantMessage;
               
               // Extract model info if available
-              const modelInfo = (finalMessage as any).model || model || 'default';
+              const modelInfo = (finalMessage as { model?: string }).model || model || 'default';
               console.log(`[Agent] Using model: ${modelInfo}`);
               
               // Extract usage information from final message
-              const messageUsage = (finalMessage as any).usage;
+              const messageUsage = (finalMessage as { usage?: { input_tokens?: number; output_tokens?: number } }).usage;
               if (messageUsage) {
                 if (messageUsage.input_tokens !== undefined) {
                   usageMetadata.input_tokens = messageUsage.input_tokens;
@@ -334,14 +334,14 @@ export async function POST(request: NextRequest) {
               // Extract text content
               if (finalMessage.message?.content && Array.isArray(finalMessage.message.content)) {
                 const textParts = finalMessage.message.content
-                  .filter((part: any) => part.type === 'text')
-                  .map((part: any) => part.text || '');
+                  .filter((part: { type?: string }) => part.type === 'text')
+                  .map((part) => (part as { text?: string }).text || '');
                 assistantMessage = textParts.join('');
                 
                 // Extract tool calls from final message - merge with existing tool calls in order
                 let hasNewToolCalls = false;
-                finalMessage.message.content.forEach((part: any) => {
-                  if (part.type === 'tool_use') {
+                finalMessage.message.content.forEach((part: { type?: string; id?: string; name?: string; input?: unknown }) => {
+                  if (part.type === 'tool_use' && part.id) {
                     const toolId = part.id;
                     const existingIndex = toolCallsMap.get(toolId);
                     
@@ -349,8 +349,8 @@ export async function POST(request: NextRequest) {
                       // New tool call - add to timeline
                       const toolCall = {
                         id: toolId,
-                        name: part.name,
-                        input: part.input,
+                        name: part.name || '',
+                        input: (part.input as Record<string, unknown>) || ({} as Record<string, unknown>),
                         status: 'pending' as const,
                         timestamp: Date.now(),
                       };
@@ -362,8 +362,8 @@ export async function POST(request: NextRequest) {
                     } else {
                       // Update existing tool call
                       const toolCall = toolCalls[existingIndex];
-                      toolCall.name = part.name;
-                      toolCall.input = part.input;
+                      if (part.name) toolCall.name = part.name;
+                      if (part.input) toolCall.input = part.input as Record<string, unknown>;
                     }
                   }
                 });
@@ -394,7 +394,7 @@ export async function POST(request: NextRequest) {
             
             // Handle tool results - update existing tool calls, don't remove them
             if (message.type === 'result') {
-              const resultMsg = message as any;
+              const resultMsg = message as { tool_use_id?: string; content?: unknown; subtype?: string };
               if (resultMsg.tool_use_id) {
                 const toolId = resultMsg.tool_use_id;
                 const existingIndex = toolCallsMap.get(toolId);
@@ -406,7 +406,8 @@ export async function POST(request: NextRequest) {
                   toolCall.status = resultMsg.subtype === 'success' ? 'success' : 'error';
                   
                   // Send updated tool calls in chronological order
-                  console.log(`[API] Sending tool_result event for tool ${toolId}:`, resultMsg.content?.substring(0, 100));
+                  const contentPreview = typeof resultMsg.content === 'string' ? resultMsg.content.substring(0, 100) : JSON.stringify(resultMsg.content).substring(0, 100);
+                  console.log(`[API] Sending tool_result event for tool ${toolId}:`, contentPreview);
                   sendChunk({
                     type: 'tool_result',
                     toolUseId: toolId,
@@ -428,10 +429,11 @@ export async function POST(request: NextRequest) {
             usage: Object.keys(usageMetadata).length > 0 ? usageMetadata : undefined,
           });
           
-        } catch (error: any) {
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Failed to process request';
           sendChunk({
             type: 'error',
-            error: error.message || 'Failed to process request',
+            error: errorMessage,
           });
         } finally {
           controller.close();
@@ -448,10 +450,11 @@ export async function POST(request: NextRequest) {
         'Access-Control-Allow-Origin': '*',
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in chat API:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to process request';
     return NextResponse.json(
-      { error: error.message || 'Failed to process request' },
+      { error: errorMessage },
       { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } }
     );
   }

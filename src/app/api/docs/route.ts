@@ -59,7 +59,7 @@ print(data['message'])`
     return NextResponse.json(docs, {
       headers: { 'Access-Control-Allow-Origin': '*' }
     });
-  } catch (error: any) {
+  } catch {
     return NextResponse.json(
       { error: 'Failed to generate docs' },
       { status: 500 }

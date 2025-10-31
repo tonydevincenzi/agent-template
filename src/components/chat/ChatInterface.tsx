@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { createSession, logMessage, isLoggingEnabled } from '@/lib/platformLogger';
 
@@ -15,14 +14,14 @@ interface Message {
   thinking?: string;
   eventType: 'user_message' | 'thinking_start' | 'thinking_delta' | 'thinking' | 'content_start' | 'content_delta' | 'tool_call_start' | 'tool_call_delta' | 'tool_call' | 'tool_result' | 'assistant_message' | 'done' | 'error';
   timestamp: Date;
-  raw?: any; // Store raw event data for debugging
+  raw?: Record<string, unknown>; // Store raw event data for debugging
 }
 
 interface ToolCall {
   id: string;
   name: string;
-  input: any;
-  result?: any;
+  input: unknown;
+  result?: unknown;
   status: 'pending' | 'success' | 'error';
   timestamp?: number; // For chronological ordering
 }
@@ -33,17 +32,30 @@ interface TodoItem {
   status: 'pending' | 'completed';
 }
 
+interface AgentConfig {
+  name?: string;
+  model?: string;
+  systemPrompt?: string;
+  tools?: Array<{ name: string; enabled: boolean }>;
+  webSearch?: boolean;
+  mcps?: Array<{ name: string; enabled: boolean }>;
+  rules?: string[];
+  uiCustomization?: {
+    todoListVisible?: boolean;
+    theme?: 'light' | 'dark';
+  };
+}
+
 export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [agentConfig, setAgentConfig] = useState<any>(null);
+  const [agentConfig, setAgentConfig] = useState<AgentConfig | null>(null);
   const [todos, setTodos] = useState<TodoItem[]>([]);
   const [showTodos, setShowTodos] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Initialize session on first load
@@ -164,7 +176,7 @@ export default function ChatInterface() {
       // Track accumulated content and current message ID for content deltas
       let contentAccumulator = '';
       let contentMessageId: string | null = null;
-      let responseMetadata: { model?: string; inputTokens?: number; outputTokens?: number } = {};
+      const responseMetadata: { model?: string; inputTokens?: number; outputTokens?: number } = {};
 
       while (true) {
         const { done, value } = await reader.read();
@@ -308,43 +320,6 @@ export default function ChatInterface() {
     }
   };
 
-  const extractToolCalls = (response: any): ToolCall[] => {
-    const toolCalls: ToolCall[] = [];
-    if (response?.message?.content) {
-      response.message.content.forEach((content: any) => {
-        if (content.type === 'tool_use') {
-          toolCalls.push({
-            id: content.id,
-            name: content.name,
-            input: content.input,
-            status: 'pending',
-          });
-        }
-      });
-    }
-    return toolCalls;
-  };
-
-  const extractTodos = (response: any): TodoItem[] => {
-    // Extract TODO items from the response
-    const todos: TodoItem[] = [];
-    const content = response?.content || response?.message?.content?.find((c: any) => c.type === 'text')?.text || '';
-    const todoMatches = content.match(/TODO:\s*(.+)/gi);
-    if (todoMatches) {
-      todoMatches.forEach((match: string) => {
-        const todoContent = match.replace(/TODO:\s*/i, '').trim();
-        if (todoContent) {
-          todos.push({
-            id: Date.now().toString() + Math.random(),
-            content: todoContent,
-            status: 'pending',
-          });
-        }
-      });
-    }
-    return todos;
-  };
-
   const toggleTodo = (id: string) => {
     setTodos(prev => prev.map(todo => 
       todo.id === id 
@@ -380,11 +355,11 @@ export default function ChatInterface() {
                   {(() => {
                     const toolsList: string[] = [];
                     if (agentConfig.webSearch) toolsList.push('Web Search');
-                    if (agentConfig.tools?.filter((t: any) => t.enabled).length > 0) {
-                      toolsList.push(...agentConfig.tools.filter((t: any) => t.enabled).map((t: any) => t.name));
+                    if (agentConfig.tools && agentConfig.tools.filter(t => t.enabled).length > 0) {
+                      toolsList.push(...agentConfig.tools.filter(t => t.enabled).map(t => t.name));
                     }
-                    if (agentConfig.mcps?.filter((mcp: any) => mcp.enabled).length > 0) {
-                      toolsList.push(...agentConfig.mcps.filter((mcp: any) => mcp.enabled).map((mcp: any) => mcp.name));
+                    if (agentConfig.mcps && agentConfig.mcps.filter(mcp => mcp.enabled).length > 0) {
+                      toolsList.push(...agentConfig.mcps.filter(mcp => mcp.enabled).map(mcp => mcp.name));
                     }
                     return toolsList.length > 0 ? <div>{toolsList.join(', ')}</div> : null;
                   })()}
@@ -399,7 +374,6 @@ export default function ChatInterface() {
             {messages.map((message, index) => {
               // Render plain text for regular content messages (no bubble)
               if (message.eventType === 'content_delta' && message.content && !message.toolCall && !message.thinking) {
-                const isStreaming = isLoading && index === messages.length - 1;
                 return (
                   <div key={message.id} className="max-w-4xl">
                     <div 
@@ -598,7 +572,7 @@ export default function ChatInterface() {
   );
 }
 
-function MessageBubble({ message, isLoading, theme }: { message: Message; isLoading: boolean; theme: 'light' | 'dark' }) {
+function MessageBubble({ message, theme }: { message: Message; isLoading: boolean; theme: 'light' | 'dark' }) {
   const [rawExpanded, setRawExpanded] = useState(false);
   const [toolExpanded, setToolExpanded] = useState(false); // Collapsed by default
   const isDark = theme === 'dark';
@@ -641,7 +615,7 @@ function MessageBubble({ message, isLoading, theme }: { message: Message; isLoad
               <div className={`space-y-2 pt-2 mt-1 border-t ${
                 isDark ? 'border-gray-700/60' : 'border-gray-200/60'
               }`}>
-                {message.toolCall.input && Object.keys(message.toolCall.input).length > 0 && (
+                {Boolean(message.toolCall.input && Object.keys(message.toolCall.input as Record<string, unknown>).length > 0) && (
                   <div>
                     <div className={`text-xs mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Input</div>
                     <pre className={`text-xs p-2 rounded border overflow-x-auto font-mono ${
@@ -653,7 +627,7 @@ function MessageBubble({ message, isLoading, theme }: { message: Message; isLoad
                     </pre>
                   </div>
                 )}
-                {message.toolCall.result && (
+                {Boolean(message.toolCall.result) && (
                   <div>
                     <div className={`text-xs mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Result</div>
                     <pre className={`text-xs p-2 rounded border overflow-x-auto max-h-60 font-mono ${
