@@ -83,23 +83,23 @@ export async function getAgentConfig(): Promise<AgentConfig> {
  * This ensures the agent works even if the platform API is unavailable
  */
 function getDefaultConfig(): AgentConfig {
-  return {
-    name: 'AI Agent',
-    systemPrompt: 'You are a helpful AI assistant.',
-    model: 'claude-haiku-4-5-20251001',
-    rules: [],
-    tools: [],
-    webSearch: false,
-    connectedApps: [],
-    mcps: [],
-    uiCustomization: {
-      chatLayout: 'single',
-      filesystemVisible: false,
-      todoListVisible: false,
-      toolCallsView: 'compact',
-      theme: 'light',
-      primaryColor: '#0084ff'
-    }
-  };
+    return {
+      name: 'AI Agent',
+      systemPrompt: 'You are a helpful AI assistant.',
+      model: 'claude-haiku-4-5-20251001',
+      rules: [],
+      tools: [],
+      webSearch: false,
+      connectedApps: [],
+      mcps: [],
+      uiCustomization: {
+        chatLayout: 'single',
+        filesystemVisible: false,
+        todoListVisible: false,
+        toolCallsView: 'compact',
+        theme: 'light',
+        primaryColor: '#0084ff'
+      }
+    };
 }
 

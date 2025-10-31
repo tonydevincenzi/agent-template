@@ -53,6 +53,7 @@ export default function ChatInterface() {
   const [agentConfig, setAgentConfig] = useState<AgentConfig | null>(null);
   const [todos, setTodos] = useState<TodoItem[]>([]);
   const [showTodos, setShowTodos] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -336,6 +337,100 @@ export default function ChatInterface() {
 
   return (
     <div className={`flex h-screen relative ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
+      {/* Config Button - Top Right */}
+      <button
+        onClick={() => setShowConfig(!showConfig)}
+        className={`fixed top-4 right-4 z-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+          isDark
+            ? 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
+            : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
+        } shadow-sm`}
+        title="View agent configuration"
+      >
+        <span className="flex items-center gap-2">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 10a2 2 0 100-4 2 2 0 000 4z" stroke="currentColor" strokeWidth="1.5"/>
+            <path d="M13 8a5 5 0 11-10 0 5 5 0 0110 0z" stroke="currentColor" strokeWidth="1.5"/>
+          </svg>
+          Config
+        </span>
+      </button>
+
+      {/* Config Modal */}
+      {showConfig && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setShowConfig(false)}>
+          <div
+            className={`relative w-full max-w-2xl max-h-[80vh] overflow-hidden rounded-lg shadow-xl ${
+              isDark ? 'bg-gray-800' : 'bg-white'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className={`flex items-center justify-between p-4 border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
+              <h2 className={`text-lg font-semibold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
+                Agent Configuration
+              </h2>
+              <button
+                onClick={() => setShowConfig(false)}
+                className={`p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}
+              >
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path d="M6 6L14 14M6 14L14 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-4 overflow-y-auto max-h-[calc(80vh-80px)]">
+              {agentConfig ? (
+                <pre className={`text-xs p-4 rounded-lg overflow-x-auto font-mono ${
+                  isDark
+                    ? 'bg-gray-900 text-gray-300'
+                    : 'bg-gray-50 text-gray-800'
+                }`}>
+{JSON.stringify(agentConfig, null, 2)}
+                </pre>
+              ) : (
+                <div className={`text-center py-8 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Loading configuration...
+                </div>
+              )}
+
+              {/* Environment Info */}
+              <div className={`mt-4 p-3 rounded-lg text-xs ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
+                <div className={`font-semibold mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Environment Variables
+                </div>
+                <div className={`space-y-1 font-mono ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  <div>DEPLOYMENT_ID: {process.env.NEXT_PUBLIC_DEPLOYMENT_ID || '(not set)'}</div>
+                  <div>PLATFORM_URL: {process.env.NEXT_PUBLIC_PLATFORM_API_URL || '(not set)'}</div>
+                </div>
+              </div>
+
+              {/* Fetch Fresh Config Button */}
+              <button
+                onClick={async () => {
+                  try {
+                    const response = await fetch('/api/config');
+                    const freshConfig = await response.json();
+                    setAgentConfig(freshConfig);
+                  } catch (error) {
+                    console.error('Failed to refresh config:', error);
+                  }
+                }}
+                className={`mt-4 w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  isDark
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-blue-500 text-white hover:bg-blue-600'
+                }`}
+              >
+                Refresh Config
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Messages Area - scrollable */}
